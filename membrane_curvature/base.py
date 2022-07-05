@@ -270,7 +270,7 @@ class MembraneCurvature(AnalysisBase):
                     y_range=self.y_range,
                 )
 
-            Zy, Zx = np.gradient(self.results.z_surface[self._frame_index])
+            Zy, Zx = np.gradient(self.results.z_surface[leaflet][self._frame_index])
             Zxy, Zxx = np.gradient(Zx)
             Zyy, _ = np.gradient(Zy)
 
