@@ -19,6 +19,7 @@ import numpy as np
 import warnings
 import MDAnalysis
 import logging
+import scipy
 
 MDAnalysis.start_logging()
 logger = logging.getLogger("MDAnalysis.MDAKit.membrane_curvature")
@@ -146,3 +147,55 @@ def normalized_grid(grid_z_coordinates, grid_norm_unit):
     z_normalized = grid_z_coordinates / grid_norm_unit
 
     return z_normalized
+
+
+
+def get_interpolated_z_surface(coordinates, P, Q, ag = None):
+    """
+    Derive surface from distribution of z coordinates in grid.
+
+    Parameters
+    ----------
+    coordinates : numpy.ndarray 
+        Coordinates of AtomGroup. Numpy array of shape=(n_atoms, 3).
+    n_x_bins : int.
+        Number of bins in grid in the `x` dimension. 
+    n_y_bins : int.
+        Number of bins in grid in the `y` dimension. 
+    x_range : tuple of (float, float)
+        Range of coordinates (min, max) in the `x` dimension with shape=(2,).
+    y_range : tuple of (float, float)
+        Range of coordinates (min, max) in the `y` dimension with shape=(2,). 
+
+    Returns
+    -------
+    z_surface: np.ndarray
+        Surface derived from set of coordinates in grid of `x_range, y_range` dimensions.
+        Returns Numpy array of floats of shape (`n_x_bins`, `n_y_bins`)
+
+    """
+
+    if ag is none:
+        raise TypeError("Missing keyword argument 'ag' is required")
+
+    _, _, z_coords = coordinates.T
+    xy = np.delete(coordinates,-1,1)
+
+    box_x, box_y, _, _, _, _ = ag.dimensions
+    xy_wrapped = np.vstack(
+                    (
+                        xy,
+                        xy + [box_x, 0],
+                        xy - [box_x, 0],
+                        xy + [0, box_y],
+                        xy - [0, box_y],
+                        xy + [box_x, box_y],
+                        xy - [box_x, box_y],
+                        xy + [box_x, -box_y],
+                        xy - [box_x, -box_y],
+                    )
+                )
+    
+    z_wrapped = np.hstack((z_coords, z_coords, z_coords, z_coords, z_coords, z_coords, z_coords, z_coords, z_coords))
+
+    return scipy.interpolate.griddata(xy_wrapped, z_wrapped, (P, Q), method="cubic")

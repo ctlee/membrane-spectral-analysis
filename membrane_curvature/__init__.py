@@ -11,7 +11,7 @@ MDAkit for Membrane Curvature
 #
 
 # Add imports here
-from .surface import normalized_grid, derive_surface, get_z_surface
+from .surface import normalized_grid, derive_surface, get_z_surface, get_interpolated_z_surface
 from .curvature import mean_curvature, gaussian_curvature
 from .base import MembraneCurvature
 

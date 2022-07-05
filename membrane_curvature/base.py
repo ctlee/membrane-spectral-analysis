@@ -15,16 +15,21 @@ in units of Å :sup:`-2`.
 
 import numpy as np
 import warnings
-from .surface import get_z_surface
-from .curvature import mean_curvature, gaussian_curvature
+from .surface import get_z_surface, get_interpolated_z_surface
+from .leaflet_finder import determine_leaflets
+
+# from .curvature import mean_curvature, gaussian_curvature
 
 import MDAnalysis
 from MDAnalysis.analysis.base import AnalysisBase
 
 import logging
+
 MDAnalysis.start_logging()
 
 logger = logging.getLogger("MDAnalysis.MDAKit.membrane_curvature")
+
+leaflets = ["upper", "lower"]
 
 
 class MembraneCurvature(AnalysisBase):
@@ -35,11 +40,13 @@ class MembraneCurvature(AnalysisBase):
     ----------
     universe : Universe or AtomGroup
         An MDAnalysis Universe object.
-    select : str or iterable of str, optional. 
+    select : str or iterable of str, optional.
         The selection string of an atom selection to use as a
         reference to derive a surface.
     wrap : bool, optional
         Apply coordinate wrapping to pack atoms into the primary unit cell.
+    interpolate : bool, optional
+        Obtain surfaces using cubic interpolation
     n_x_bins : int, optional, default: '100'
         Number of bins in grid in the x dimension.
     n_y_bins : int, optional, default: '100'
@@ -60,13 +67,13 @@ class MembraneCurvature(AnalysisBase):
     results.gaussian_curvature : ndarray
         Gaussian curvature associated to the surface.
         Arrays of shape (`n_frames`, `n_x_bins`, `n_y_bins`)
-    results.average_z_surface : ndarray 
-        Average of the array elements in `z_surface`. 
+    results.average_z_surface : ndarray
+        Average of the array elements in `z_surface`.
         Each array has shape (`n_x_bins`, `n_y_bins`)
-    results.average_mean_curvature : ndarray 
+    results.average_mean_curvature : ndarray
         Average of the array elements in `mean_curvature`.
         Each array has shape (`n_x_bins`, `n_y_bins`)
-    results.average_gaussian_curvature: ndarray 
+    results.average_gaussian_curvature: ndarray
         Average of the array elements in `gaussian_curvature`.
         Each array has shape (`n_x_bins`, `n_y_bins`)
 
@@ -122,19 +129,41 @@ class MembraneCurvature(AnalysisBase):
 
     """
 
-    def __init__(self, universe, select='all',
-                 n_x_bins=100, n_y_bins=100,
-                 x_range=None,
-                 y_range=None,
-                 wrap=True, **kwargs):
+    def __init__(
+        self,
+        universe,
+        # select="all",
+        n_x_bins=100,
+        n_y_bins=100,
+        x_range=None,
+        y_range=None,
+        wrap=True,
+        interpolate=False,
+        **kwargs,
+    ):
 
         super().__init__(universe.universe.trajectory, **kwargs)
-        self.ag = universe.select_atoms(select)
+
+        self.ag = determine_leaflets(universe, select)
+        # self.ag = universe.select_atoms(select)
+
         self.wrap = wrap
+        self.interpolate = interpolate
         self.n_x_bins = n_x_bins
         self.n_y_bins = n_y_bins
         self.x_range = x_range if x_range else (0, universe.dimensions[0])
         self.y_range = y_range if y_range else (0, universe.dimensions[1])
+
+        self.x_step = (x_range[1] - x_range[0]) / self.n_x_bins
+        self.y_step = (y_range[1] - y_range[0]) / self.n_y_bins
+
+        self.P, self.Q = np.mgrid[
+            x_range[0] : x_range[1] : self.x_step,
+            y_range[0] : y_range[1] : self.y_step,
+        ]
+
+        self.qx = 2 * math.pi * np.fft.fftfreq(n_x_bins, self.x_step)
+        self.qy = 2 * math.pi * np.fft.fftfreq(n_y_bins, self.y_step)
 
         # Raise if selection doesn't exist
         if len(self.ag) == 0:
@@ -142,51 +171,150 @@ class MembraneCurvature(AnalysisBase):
 
         # Only checks the first frame. NPT simulations not properly covered here.
         # Warning message if range doesn't cover entire dimensions of simulation box
-        for dim_string, dim_range, num in [('x', self.x_range, 0), ('y', self.y_range, 1)]:
-            if (dim_range[1] < universe.dimensions[num]):
-                msg = (f"Grid range in {dim_string} does not cover entire "
-                       "dimensions of simulation box.\n Minimum dimensions "
-                       "must be equal to simulation box.")
+        for dim_string, dim_range, num in [
+            ("x", self.x_range, 0),
+            ("y", self.y_range, 1),
+        ]:
+            if dim_range[1] < universe.dimensions[num]:
+                msg = (
+                    f"Grid range in {dim_string} does not cover entire "
+                    "dimensions of simulation box.\n Minimum dimensions "
+                    "must be equal to simulation box."
+                )
                 warnings.warn(msg)
                 logger.warn(msg)
 
         # Apply wrapping coordinates
         if not self.wrap:
             # Warning
-            msg = (" `wrap == False` may result in inaccurate calculation "
-                   "of membrane curvature. Surfaces will be derived from "
-                   "a reduced number of atoms. \n "
-                   " Ignore this warning if your trajectory has "
-                   " rotational/translational fit rotations! ")
+            msg = (
+                " `wrap == False` may result in inaccurate calculation "
+                "of membrane curvature. Surfaces will be derived from "
+                "a reduced number of atoms. \n "
+                " Ignore this warning if your trajectory has "
+                " rotational/translational fit rotations! "
+            )
             warnings.warn(msg)
             logger.warn(msg)
 
     def _prepare(self):
         # Initialize empty np.array with results
-        self.results.z_surface = np.full((self.n_frames,
-                                          self.n_x_bins,
-                                          self.n_y_bins), np.nan)
-        self.results.mean = np.full((self.n_frames,
-                                     self.n_x_bins,
-                                     self.n_y_bins), np.nan)
-        self.results.gaussian = np.full((self.n_frames,
-                                         self.n_x_bins,
-                                         self.n_y_bins), np.nan)
+        self.results.z_surface = dict(
+            zip(
+                leaflets,
+                [
+                    np.full((self.n_frames, self.n_x_bins, self.n_y_bins), np.nan),
+                    np.full((self.n_frames, self.n_x_bins, self.n_y_bins), np.nan),
+                ],
+            )
+        )
+        self.results.mean = dict(
+            zip(
+                leaflets,
+                [
+                    np.full((self.n_frames, self.n_x_bins, self.n_y_bins), np.nan),
+                    np.full((self.n_frames, self.n_x_bins, self.n_y_bins), np.nan),
+                ],
+            )
+        )
+        self.results.gaussian = dict(
+            zip(
+                leaflets,
+                [
+                    np.full((self.n_frames, self.n_x_bins, self.n_y_bins), np.nan),
+                    np.full((self.n_frames, self.n_x_bins, self.n_y_bins), np.nan),
+                ],
+            )
+        )
+
+        self.results.thickness = np.full(
+            (self.n_frames, self.n_x_bins, self.n_y_bins), np.nan
+        )
+        self.results.height = np.full(
+            (self.n_frames, self.n_x_bins, self.n_y_bins), np.nan
+        )
+
+        self.results.thickness_power_spectrum = np.full(
+            (self.n_frames, self.n_x_bins, self.n_y_bins), np.nan
+        )
+        self.results.height_power_spectrum = np.full(
+            (self.n_frames, self.n_x_bins, self.n_y_bins), np.nan
+        )
 
     def _single_frame(self):
         # Apply wrapping coordinates
         if self.wrap:
-            self.ag.wrap()
-        # Populate a slice with np.arrays of surface, mean, and gaussian per frame
-        self.results.z_surface[self._frame_index] = get_z_surface(self.ag.positions,
-                                                                  n_x_bins=self.n_x_bins,
-                                                                  n_y_bins=self.n_y_bins,
-                                                                  x_range=self.x_range,
-                                                                  y_range=self.y_range)
-        self.results.mean[self._frame_index] = mean_curvature(self.results.z_surface[self._frame_index])
-        self.results.gaussian[self._frame_index] = gaussian_curvature(self.results.z_surface[self._frame_index])
+            for leaflet in leaflets:
+                self.ag[leaflet].wrap()
+
+        # cog = (self.ag['upper'] | self.ag['lower']).center_of_geometry()
+
+        for leaflet in leaflets:
+            # Populate a slice with np.arrays of surface, mean, and gaussian per frame
+
+            if self.interpolate:
+                self.results.z_surface[self._frame_index][
+                    leaflet
+                ] = get_interpolated_z_surface(
+                    self.ag[leaflet].positions,
+                    self.P,
+                    self.Q,
+                    ag=self.ag[leaflet],
+                )
+            else:
+                self.results.z_surface[self._frame_index][leaflet] = get_z_surface(
+                    self.ag[leaflet].positions,
+                    n_x_bins=self.n_x_bins,
+                    n_y_bins=self.n_y_bins,
+                    x_range=self.x_range,
+                    y_range=self.y_range,
+                )
+
+            Zy, Zx = np.gradient(self.results.z_surface[self._frame_index])
+            Zxy, Zxx = np.gradient(Zx)
+            Zyy, _ = np.gradient(Zy)
+
+            # self.results.gaussian[self._frame_index] = gaussian_curvature(self.results.z_surface[self._frame_index])
+            self.results.gaussian[self._frame_index] = (Zxx * Zyy - (Zxy**2)) / (
+                1 + (Zx**2) + (Zy**2)
+            ) ** 2
+
+            # self.results.mean[self._frame_index] = mean_curvature(self.results.z_surface[self._frame_index])
+            self.results.mean[self._frame_index] = (
+                (1 + Zx**2) * Zyy + (1 + Zy**2) * Zxx - 2 * Zx * Zy * Zxy
+            )
+            self.results.mean[self._frame_index] /= 2 * (1 + Zx**2 + Zy**2) ** (1.5)
+
+        self.results.thickness[self._frame_index] = (
+            self.results.z_surface[self._frame_index]["upper"]
+            - self.results.z_surface[self._frame_index]["lower"]
+        )
+
+        self.results.height[self._frame_index] = (
+            self.results.z_surface[self._frame_index]["upper"]
+            + self.results.z_surface[self._frame_index]["lower"]
+        ) / 2.0  # - cog[2]
+
+
+        ### Assumes x, y have same step...
+        FFT = np.fft.fft2(
+            self.results.thickness[self._frame_index]
+            - np.nanmean(self.results.thickness[self._frame_index])
+        )
+        FFT *= self.x_step / len(FFT)
+        self.results.thickness_power_spectrum = np.square(p.abs(np.fft.fftshift(FFT)))
+
+
+
+        FFT = np.fft.fft2(
+            self.results.height[self._frame_index]
+            - np.nanmean(self.results.height[self._frame_index])
+        )
+        FFT *= self.x_step / len(FFT)
+        self.results.height_power_spectrum = np.square(p.abs(np.fft.fftshift(FFT)))
 
     def _conclude(self):
-        self.results.average_z_surface = np.nanmean(self.results.z_surface, axis=0)
-        self.results.average_mean = np.nanmean(self.results.mean, axis=0)
-        self.results.average_gaussian = np.nanmean(self.results.gaussian, axis=0)
+        pass
+        # self.results.average_z_surface = np.nanmean(self.results.z_surface, axis=0)
+        # self.results.average_mean = np.nanmean(self.results.mean, axis=0)
+        # self.results.average_gaussian = np.nanmean(self.results.gaussian, axis=0)
