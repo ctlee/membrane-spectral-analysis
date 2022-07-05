@@ -288,13 +288,13 @@ class MembraneCurvature(AnalysisBase):
             ) ** (1.5)
 
         self.results.thickness[self._frame_index] = (
-            self.results.z_surface[self._frame_index]["upper"]
-            - self.results.z_surface[self._frame_index]["lower"]
+            self.results.z_surface["upper"][self._frame_index]
+            - self.results.z_surface["lower"][self._frame_index]
         )
 
         self.results.height[self._frame_index] = (
-            self.results.z_surface[self._frame_index]["upper"]
-            + self.results.z_surface[self._frame_index]["lower"]
+            self.results.z_surface["upper"][self._frame_index]
+            + self.results.z_surface["lower"][self._frame_index]
         ) / 2.0  # - cog[2]
 
         ### Assumes x, y have same step...
@@ -303,14 +303,14 @@ class MembraneCurvature(AnalysisBase):
             - np.nanmean(self.results.thickness[self._frame_index])
         )
         FFT *= self.x_step / len(FFT)
-        self.results.thickness_power_spectrum = np.square(p.abs(np.fft.fftshift(FFT)))
+        self.results.thickness_power_spectrum = np.square(np.abs(np.fft.fftshift(FFT)))
 
         FFT = np.fft.fft2(
             self.results.height[self._frame_index]
             - np.nanmean(self.results.height[self._frame_index])
         )
         FFT *= self.x_step / len(FFT)
-        self.results.height_power_spectrum = np.square(p.abs(np.fft.fftshift(FFT)))
+        self.results.height_power_spectrum = np.square(np.abs(np.fft.fftshift(FFT)))
 
     def _conclude(self):
         pass
