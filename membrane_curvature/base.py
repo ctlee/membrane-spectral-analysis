@@ -132,7 +132,7 @@ class MembraneCurvature(AnalysisBase):
     def __init__(
         self,
         universe,
-        # select="all",
+        select="all",
         n_x_bins=100,
         n_y_bins=100,
         x_range=None,
@@ -162,8 +162,8 @@ class MembraneCurvature(AnalysisBase):
             y_range[0] : y_range[1] : self.y_step,
         ]
 
-        self.qx = 2 * math.pi * np.fft.fftfreq(n_x_bins, self.x_step)
-        self.qy = 2 * math.pi * np.fft.fftfreq(n_y_bins, self.y_step)
+        self.qx = 2 * np.pi * np.fft.fftfreq(n_x_bins, self.x_step)
+        self.qy = 2 * np.pi * np.fft.fftfreq(n_y_bins, self.y_step)
 
         # Raise if selection doesn't exist
         if len(self.ag) == 0:
@@ -253,8 +253,8 @@ class MembraneCurvature(AnalysisBase):
             # Populate a slice with np.arrays of surface, mean, and gaussian per frame
 
             if self.interpolate:
-                self.results.z_surface[self._frame_index][
-                    leaflet
+                self.results.z_surface[leaflet][
+                    self._frame_index
                 ] = get_interpolated_z_surface(
                     self.ag[leaflet].positions,
                     self.P,
@@ -262,7 +262,7 @@ class MembraneCurvature(AnalysisBase):
                     ag=self.ag[leaflet],
                 )
             else:
-                self.results.z_surface[self._frame_index][leaflet] = get_z_surface(
+                self.results.z_surface[leaflet][self._frame_index] = get_z_surface(
                     self.ag[leaflet].positions,
                     n_x_bins=self.n_x_bins,
                     n_y_bins=self.n_y_bins,
@@ -275,15 +275,17 @@ class MembraneCurvature(AnalysisBase):
             Zyy, _ = np.gradient(Zy)
 
             # self.results.gaussian[self._frame_index] = gaussian_curvature(self.results.z_surface[self._frame_index])
-            self.results.gaussian[self._frame_index] = (Zxx * Zyy - (Zxy**2)) / (
-                1 + (Zx**2) + (Zy**2)
-            ) ** 2
+            self.results.gaussian[leaflet][self._frame_index] = (
+                Zxx * Zyy - (Zxy**2)
+            ) / (1 + (Zx**2) + (Zy**2)) ** 2
 
             # self.results.mean[self._frame_index] = mean_curvature(self.results.z_surface[self._frame_index])
-            self.results.mean[self._frame_index] = (
+            self.results.mean[leaflet][self._frame_index] = (
                 (1 + Zx**2) * Zyy + (1 + Zy**2) * Zxx - 2 * Zx * Zy * Zxy
             )
-            self.results.mean[self._frame_index] /= 2 * (1 + Zx**2 + Zy**2) ** (1.5)
+            self.results.mean[leaflet][self._frame_index] /= 2 * (
+                1 + Zx**2 + Zy**2
+            ) ** (1.5)
 
         self.results.thickness[self._frame_index] = (
             self.results.z_surface[self._frame_index]["upper"]
@@ -295,7 +297,6 @@ class MembraneCurvature(AnalysisBase):
             + self.results.z_surface[self._frame_index]["lower"]
         ) / 2.0  # - cog[2]
 
-
         ### Assumes x, y have same step...
         FFT = np.fft.fft2(
             self.results.thickness[self._frame_index]
@@ -303,8 +304,6 @@ class MembraneCurvature(AnalysisBase):
         )
         FFT *= self.x_step / len(FFT)
         self.results.thickness_power_spectrum = np.square(p.abs(np.fft.fftshift(FFT)))
-
-
 
         FFT = np.fft.fft2(
             self.results.height[self._frame_index]

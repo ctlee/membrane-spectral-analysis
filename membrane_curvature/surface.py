@@ -175,7 +175,7 @@ def get_interpolated_z_surface(coordinates, P, Q, ag = None):
 
     """
 
-    if ag is none:
+    if ag is None:
         raise TypeError("Missing keyword argument 'ag' is required")
 
     _, _, z_coords = coordinates.T

@@ -41,7 +41,7 @@ def determine_leaflets(universe, selection = "all"):
 
     # apply the MDAnalysis LeafletFinder graph-based method to determine the two largest groups which
     #  should correspond to the upper and lower leaflets
-    phosphates = LeafletFinder(universe,selectioon)
+    phosphates = LeafletFinder(universe,selection)
 
     # find the two largest groups - required as the first two returned by LeafletFinder, whilst usually are the largest, this is not always so
     (a, b) = largest_groups(phosphates.sizes())
