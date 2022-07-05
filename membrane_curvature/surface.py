@@ -19,7 +19,7 @@ import numpy as np
 import warnings
 import MDAnalysis
 import logging
-import scipy
+from scipy.interpolate import griddata
 
 MDAnalysis.start_logging()
 logger = logging.getLogger("MDAnalysis.MDAKit.membrane_curvature")
@@ -198,4 +198,4 @@ def get_interpolated_z_surface(coordinates, P, Q, ag = None):
     
     z_wrapped = np.hstack((z_coords, z_coords, z_coords, z_coords, z_coords, z_coords, z_coords, z_coords, z_coords))
 
-    return scipy.interpolate.griddata(xy_wrapped, z_wrapped, (P, Q), method="cubic")
+    return griddata(xy_wrapped, z_wrapped, (P, Q), method="cubic")
