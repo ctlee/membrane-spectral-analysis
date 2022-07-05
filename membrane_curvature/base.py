@@ -247,7 +247,7 @@ class MembraneCurvature(AnalysisBase):
             for leaflet in leaflets:
                 self.ag[leaflet].wrap()
 
-        # cog = (self.ag['upper'] | self.ag['lower']).center_of_geometry()
+        cog = (self.ag['upper'] | self.ag['lower']).center_of_geometry()
 
         for leaflet in leaflets:
             # Populate a slice with np.arrays of surface, mean, and gaussian per frame
@@ -295,7 +295,7 @@ class MembraneCurvature(AnalysisBase):
         self.results.height[self._frame_index] = (
             self.results.z_surface["upper"][self._frame_index]
             + self.results.z_surface["lower"][self._frame_index]
-        ) / 2.0  # - cog[2]
+        ) / 2.0 - cog[2]
 
         ### Assumes x, y have same step...
         FFT = np.fft.fft2(
