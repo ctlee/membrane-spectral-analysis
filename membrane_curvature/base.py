@@ -162,8 +162,8 @@ class MembraneCurvature(AnalysisBase):
             y_range[0] : y_range[1] : self.y_step,
         ]
 
-        self.qx = 2 * np.pi * np.fft.fftfreq(n_x_bins, self.x_step)
-        self.qy = 2 * np.pi * np.fft.fftfreq(n_y_bins, self.y_step)
+        self.qx = 2 * np.pi * np.fft.fftshift(np.fft.fftfreq(n_x_bins, self.x_step))
+        self.qy = 2 * np.pi * np.fft.fftshift(np.fft.fftfreq(n_y_bins, self.y_step))
 
         # Raise if selection doesn't exist
         if len(self.ag) == 0:
@@ -247,7 +247,7 @@ class MembraneCurvature(AnalysisBase):
             for leaflet in leaflets:
                 self.ag[leaflet].wrap()
 
-        cog = (self.ag['upper'] | self.ag['lower']).center_of_geometry()
+        cog = (self.ag["upper"] | self.ag["lower"]).center_of_geometry()
 
         for leaflet in leaflets:
             # Populate a slice with np.arrays of surface, mean, and gaussian per frame
@@ -297,20 +297,22 @@ class MembraneCurvature(AnalysisBase):
             + self.results.z_surface["lower"][self._frame_index]
         ) / 2.0 - cog[2]
 
-        ### Assumes x, y have same step...
-        FFT = np.fft.fft2(
+        # Thickness fluctuation spectra
+        FFT_thickness = np.fft.fft2(
             self.results.thickness[self._frame_index]
             - np.nanmean(self.results.thickness[self._frame_index])
         )
-        FFT *= self.x_step / len(FFT)
-        self.results.thickness_power_spectrum = np.square(np.abs(np.fft.fftshift(FFT)))
-
-        FFT = np.fft.fft2(
-            self.results.height[self._frame_index]
-            - np.nanmean(self.results.height[self._frame_index])
+        FFT_thickness *= self.x_step / len(FFT_thickness)
+        self.results.thickness_power_spectrum[self._frame_index] = (
+            np.abs(np.fft.fftshift(FFT_thickness)) ** 2
         )
-        FFT *= self.x_step / len(FFT)
-        self.results.height_power_spectrum = np.square(np.abs(np.fft.fftshift(FFT)))
+
+        # Height fluctuation spectra
+        FFT_height = np.fft.fft2(self.results.height[self._frame_index])
+        FFT_height *= 0.5 * (self.y_step + self.x_step) / len(FFT_height)
+        self.results.height_power_spectrum[self._frame_index] = (
+            np.abs(np.fft.fftshift(FFT_height)) ** 2
+        )
 
     def _conclude(self):
         pass
