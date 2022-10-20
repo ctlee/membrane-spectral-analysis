@@ -51,26 +51,33 @@ def derive_surface(atoms, n_cells_x, n_cells_y, max_width_x, max_width_y):
 
     """
     coordinates = atoms.positions
-    return get_z_surface(coordinates, n_x_bins=n_cells_x, n_y_bins=n_cells_y,
-                         x_range=(0, max_width_x), y_range=(0, max_width_y))
+    return get_z_surface(
+        coordinates,
+        n_x_bins=n_cells_x,
+        n_y_bins=n_cells_y,
+        x_range=(0, max_width_x),
+        y_range=(0, max_width_y),
+    )
 
 
-def get_z_surface(coordinates, n_x_bins=10, n_y_bins=10, x_range=(0, 100), y_range=(0, 100)):
+def get_z_surface(
+    coordinates, n_x_bins=10, n_y_bins=10, x_range=(0, 100), y_range=(0, 100)
+):
     """
     Derive surface from distribution of z coordinates in grid.
 
     Parameters
     ----------
-    coordinates : numpy.ndarray 
+    coordinates : numpy.ndarray
         Coordinates of AtomGroup. Numpy array of shape=(n_atoms, 3).
     n_x_bins : int.
-        Number of bins in grid in the `x` dimension. 
+        Number of bins in grid in the `x` dimension.
     n_y_bins : int.
-        Number of bins in grid in the `y` dimension. 
+        Number of bins in grid in the `y` dimension.
     x_range : tuple of (float, float)
         Range of coordinates (min, max) in the `x` dimension with shape=(2,).
     y_range : tuple of (float, float)
-        Range of coordinates (min, max) in the `y` dimension with shape=(2,). 
+        Range of coordinates (min, max) in the `y` dimension with shape=(2,).
 
     Returns
     -------
@@ -96,10 +103,12 @@ def get_z_surface(coordinates, n_x_bins=10, n_y_bins=10, x_range=(0, 100), y_ran
         try:
             # negative coordinates
             if l < 0 or m < 0:
-                msg = ("Atom with negative coordinates falls "
-                       "outside grid boundaries. Element "
-                       "({},{}) in grid can't be assigned."
-                       " Skipping atom.").format(l, m)
+                msg = (
+                    "Atom with negative coordinates falls "
+                    "outside grid boundaries. Element "
+                    "({},{}) in grid can't be assigned."
+                    " Skipping atom."
+                ).format(l, m)
                 warnings.warn(msg)
                 logger.warning(msg)
                 continue
@@ -109,10 +118,12 @@ def get_z_surface(coordinates, n_x_bins=10, n_y_bins=10, x_range=(0, 100), y_ran
 
         # too large positive coordinates
         except IndexError:
-            msg = ("Atom coordinates exceed size of grid "
-                   "and element ({},{}) can't be assigned. "
-                   "Maximum (x,y) coordinates must be < ({}, {}). "
-                   "Skipping atom.").format(l, m, x_range[1], y_range[1])
+            msg = (
+                "Atom coordinates exceed size of grid "
+                "and element ({},{}) can't be assigned. "
+                "Maximum (x,y) coordinates must be < ({}, {}). "
+                "Skipping atom."
+            ).format(l, m, x_range[1], y_range[1])
             warnings.warn(msg)
             logger.warning(msg)
 
@@ -149,23 +160,22 @@ def normalized_grid(grid_z_coordinates, grid_norm_unit):
     return z_normalized
 
 
-
-def get_interpolated_z_surface(coordinates, P, Q, ag = None):
+def get_interpolated_z_surface(coordinates, P, Q, ag=None):
     """
     Derive surface from distribution of z coordinates in grid.
 
     Parameters
     ----------
-    coordinates : numpy.ndarray 
+    coordinates : numpy.ndarray
         Coordinates of AtomGroup. Numpy array of shape=(n_atoms, 3).
     n_x_bins : int.
-        Number of bins in grid in the `x` dimension. 
+        Number of bins in grid in the `x` dimension.
     n_y_bins : int.
-        Number of bins in grid in the `y` dimension. 
+        Number of bins in grid in the `y` dimension.
     x_range : tuple of (float, float)
         Range of coordinates (min, max) in the `x` dimension with shape=(2,).
     y_range : tuple of (float, float)
-        Range of coordinates (min, max) in the `y` dimension with shape=(2,). 
+        Range of coordinates (min, max) in the `y` dimension with shape=(2,).
 
     Returns
     -------
@@ -179,23 +189,100 @@ def get_interpolated_z_surface(coordinates, P, Q, ag = None):
         raise TypeError("Missing keyword argument 'ag' is required")
 
     _, _, z_coords = coordinates.T
-    xy = np.delete(coordinates,-1,1)
+    xy = np.delete(coordinates, -1, 1)
 
     box_x, box_y, _, _, _, _ = ag.dimensions
     xy_wrapped = np.vstack(
-                    (
-                        xy,
-                        xy + [box_x, 0],
-                        xy - [box_x, 0],
-                        xy + [0, box_y],
-                        xy - [0, box_y],
-                        xy + [box_x, box_y],
-                        xy - [box_x, box_y],
-                        xy + [box_x, -box_y],
-                        xy - [box_x, -box_y],
-                    )
-                )
-    
-    z_wrapped = np.hstack((z_coords, z_coords, z_coords, z_coords, z_coords, z_coords, z_coords, z_coords, z_coords))
+        (
+            xy,
+            xy + [box_x, 0],
+            xy - [box_x, 0],
+            xy + [0, box_y],
+            xy - [0, box_y],
+            xy + [box_x, box_y],
+            xy - [box_x, box_y],
+            xy + [box_x, -box_y],
+            xy - [box_x, -box_y],
+        )
+    )
+
+    z_wrapped = np.hstack(
+        (
+            z_coords,
+            z_coords,
+            z_coords,
+            z_coords,
+            z_coords,
+            z_coords,
+            z_coords,
+            z_coords,
+            z_coords,
+        )
+    )
+
+    return griddata(xy_wrapped, z_wrapped, (P, Q), method="cubic")
+
+
+def get_interpolated_z_surface2(coordinates, P, Q, ag=None):
+    """
+    Derive surface from distribution of z coordinates in grid.
+
+    Parameters
+    ----------
+    coordinates : numpy.ndarray
+        Coordinates of AtomGroup. Numpy array of shape=(n_atoms, 3).
+    n_x_bins : int.
+        Number of bins in grid in the `x` dimension.
+    n_y_bins : int.
+        Number of bins in grid in the `y` dimension.
+    x_range : tuple of (float, float)
+        Range of coordinates (min, max) in the `x` dimension with shape=(2,).
+    y_range : tuple of (float, float)
+        Range of coordinates (min, max) in the `y` dimension with shape=(2,).
+
+    Returns
+    -------
+    z_surface: np.ndarray
+        Surface derived from set of coordinates in grid of `x_range, y_range` dimensions.
+        Returns Numpy array of floats of shape (`n_x_bins`, `n_y_bins`)
+
+    """
+
+    if ag is None:
+        raise TypeError("Missing keyword argument 'ag' is required")
+
+    _, _, z_coords = coordinates.T
+    z_coords -= np.mean(z_coords)
+
+    xy = np.delete(coordinates, -1, 1)
+
+    box_x, box_y, _, _, _, _ = ag.dimensions
+    xy_wrapped = np.vstack(
+        (
+            xy,
+            xy + [box_x, 0],
+            xy - [box_x, 0],
+            xy + [0, box_y],
+            xy - [0, box_y],
+            xy + [box_x, box_y],
+            xy - [box_x, box_y],
+            xy + [box_x, -box_y],
+            xy - [box_x, -box_y],
+        )
+    )
+
+    z_wrapped = np.hstack(
+        (
+            z_coords,
+            z_coords,
+            z_coords,
+            z_coords,
+            z_coords,
+            z_coords,
+            z_coords,
+            z_coords,
+            z_coords,
+        )
+    )
 
     return griddata(xy_wrapped, z_wrapped, (P, Q), method="cubic")

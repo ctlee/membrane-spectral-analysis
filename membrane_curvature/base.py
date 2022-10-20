@@ -15,7 +15,11 @@ in units of Å :sup:`-2`.
 
 import numpy as np
 import warnings
-from .surface import get_z_surface, get_interpolated_z_surface
+from .surface import (
+    get_interpolated_z_surface2,
+    get_z_surface,
+    get_interpolated_z_surface,
+)
 from .leaflet_finder import determine_leaflets
 
 # from .curvature import mean_curvature, gaussian_curvature
@@ -157,13 +161,13 @@ class MembraneCurvature(AnalysisBase):
         self.x_step = (x_range[1] - x_range[0]) / self.n_x_bins
         self.y_step = (y_range[1] - y_range[0]) / self.n_y_bins
 
+        # Initialize mesh grid and wave vectors
         self.P, self.Q = np.mgrid[
             x_range[0] : x_range[1] : self.x_step,
             y_range[0] : y_range[1] : self.y_step,
         ]
-
-        self.qx = 2 * np.pi * np.fft.fftshift(np.fft.fftfreq(n_x_bins, self.x_step))
-        self.qy = 2 * np.pi * np.fft.fftshift(np.fft.fftfreq(n_y_bins, self.y_step))
+        self.qx = 2 * np.pi * np.fft.fftshift(np.fft.fftfreq(self.n_x_bins, self.x_step))
+        self.qy = 2 * np.pi * np.fft.fftshift(np.fft.fftfreq(self.n_y_bins, self.y_step))
 
         # Raise if selection doesn't exist
         if len(self.ag) == 0:
@@ -226,15 +230,19 @@ class MembraneCurvature(AnalysisBase):
                 ],
             )
         )
-
         self.results.thickness = np.full(
+            (self.n_frames, self.n_x_bins, self.n_y_bins), np.nan
+        )
+        self.results.thickness_fowler = np.full(
             (self.n_frames, self.n_x_bins, self.n_y_bins), np.nan
         )
         self.results.height = np.full(
             (self.n_frames, self.n_x_bins, self.n_y_bins), np.nan
         )
-
         self.results.thickness_power_spectrum = np.full(
+            (self.n_frames, self.n_x_bins, self.n_y_bins), np.nan
+        )
+        self.results.thickness_power_spectrum_fowler = np.full(
             (self.n_frames, self.n_x_bins, self.n_y_bins), np.nan
         )
         self.results.height_power_spectrum = np.full(
@@ -249,6 +257,8 @@ class MembraneCurvature(AnalysisBase):
 
         cog = (self.ag["upper"] | self.ag["lower"]).center_of_geometry()
 
+        surf_fowler = {}
+
         for leaflet in leaflets:
             # Populate a slice with np.arrays of surface, mean, and gaussian per frame
 
@@ -261,6 +271,14 @@ class MembraneCurvature(AnalysisBase):
                     self.Q,
                     ag=self.ag[leaflet],
                 )
+
+                surf_fowler[leaflet] = get_interpolated_z_surface2(
+                    self.ag[leaflet].positions,
+                    self.P,
+                    self.Q,
+                    ag=self.ag[leaflet],
+                )
+
             else:
                 self.results.z_surface[leaflet][self._frame_index] = get_z_surface(
                     self.ag[leaflet].positions,
@@ -292,27 +310,42 @@ class MembraneCurvature(AnalysisBase):
             - self.results.z_surface["lower"][self._frame_index]
         )
 
+        self.results.thickness_fowler[self._frame_index] = (
+            surf_fowler["upper"] - surf_fowler["lower"]
+        ) / 2
+
         self.results.height[self._frame_index] = (
             self.results.z_surface["upper"][self._frame_index]
             + self.results.z_surface["lower"][self._frame_index]
         ) / 2.0 - cog[2]
 
         # Thickness fluctuation spectra
+        FFT_thickness = np.fft.fft2(self.results.thickness_fowler[self._frame_index])
+        FFT_thickness *= self.x_step / len(FFT_thickness)
+        self.results.thickness_power_spectrum_fowler[self._frame_index] = (
+            np.abs(np.fft.fftshift(FFT_thickness)) ** 2
+        )  # Angstrom^4
+
         FFT_thickness = np.fft.fft2(
-            self.results.thickness[self._frame_index]
-            - np.nanmean(self.results.thickness[self._frame_index])
+            (
+                (
+                    self.results.thickness[self._frame_index]
+                    - np.nanmean(self.results.thickness[self._frame_index])
+                )
+                / 2
+            )
         )
         FFT_thickness *= self.x_step / len(FFT_thickness)
         self.results.thickness_power_spectrum[self._frame_index] = (
             np.abs(np.fft.fftshift(FFT_thickness)) ** 2
-        )
+        )  # Angstrom^4
 
         # Height fluctuation spectra
         FFT_height = np.fft.fft2(self.results.height[self._frame_index])
-        FFT_height *= 0.5 * (self.y_step + self.x_step) / len(FFT_height)
+        FFT_height *= self.x_step / len(FFT_height) # Angstrom^2
         self.results.height_power_spectrum[self._frame_index] = (
             np.abs(np.fft.fftshift(FFT_height)) ** 2
-        )
+        )  # Angstrom^4
 
     def _conclude(self):
         pass
