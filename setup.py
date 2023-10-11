@@ -1,6 +1,6 @@
 """
-MembraneCurvature MDAkit
-A tool to calculate Membrane Curvature
+Membrane spectral analysis MDAkit
+A tool to perform membrane spectral analysis
 """
 import sys
 from setuptools import setup, find_packages
@@ -9,8 +9,8 @@ import versioneer
 short_description = __doc__.split("\n")
 
 # from https://github.com/pytest-dev/pytest-runner#conditional-requirement
-needs_pytest = {'pytest', 'test', 'ptr'}.intersection(sys.argv)
-pytest_runner = ['pytest-runner'] if needs_pytest else []
+# needs_pytest = {'pytest', 'test', 'ptr'}.intersection(sys.argv)
+# pytest_runner = ['pytest-runner'] if needs_pytest else []
 
 try:
     with open("README.md", "r") as handle:
@@ -21,9 +21,9 @@ except:
 
 setup(
     # Self-descriptive entries which should always be present
-    name='membrane_curvature',
-    author='Estefania Barreto-Ojeda',
-    author_email='estefania.b.ojeda@gmail.com',
+    name='membrane_spectral_analysis',
+    author='Christopher T. lee',
+    author_email=' ctlee@ucsd.edu',
     description="MDAnalysis tool to calculate membrane curvature from MD simulations.",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -63,5 +63,4 @@ setup(
 
     # Manual control if final package is compressible or not, set False to prevent the .egg from being made
     # zip_safe=False,
-
 )
