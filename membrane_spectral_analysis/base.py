@@ -98,24 +98,6 @@ class MembraneSpectralAnalysis(AnalysisBase):
                 ],
             )
         )
-        self.results.mean = dict(
-            zip(
-                leaflets,
-                [
-                    np.full((self.n_frames, self.n_x_bins, self.n_y_bins), np.nan),
-                    np.full((self.n_frames, self.n_x_bins, self.n_y_bins), np.nan),
-                ],
-            )
-        )
-        self.results.gaussian = dict(
-            zip(
-                leaflets,
-                [
-                    np.full((self.n_frames, self.n_x_bins, self.n_y_bins), np.nan),
-                    np.full((self.n_frames, self.n_x_bins, self.n_y_bins), np.nan),
-                ],
-            )
-        )
         self.results.thickness = np.full(
             (self.n_frames, self.n_x_bins, self.n_y_bins), np.nan
         )
@@ -155,23 +137,6 @@ class MembraneSpectralAnalysis(AnalysisBase):
                     x_range=self.x_range,
                     y_range=self.y_range,
                 )
-
-            Zy, Zx = np.gradient(self.results.z_surface[leaflet][self._frame_index])
-            Zxy, Zxx = np.gradient(Zx)
-            Zyy, _ = np.gradient(Zy)
-
-            # self.results.gaussian[self._frame_index] = gaussian_curvature(self.results.z_surface[self._frame_index])
-            self.results.gaussian[leaflet][self._frame_index] = (
-                Zxx * Zyy - (Zxy**2)
-            ) / (1 + (Zx**2) + (Zy**2)) ** 2
-
-            # self.results.mean[self._frame_index] = mean_curvature(self.results.z_surface[self._frame_index])
-            self.results.mean[leaflet][self._frame_index] = (
-                (1 + Zx**2) * Zyy + (1 + Zy**2) * Zxx - 2 * Zx * Zy * Zxy
-            )
-            self.results.mean[leaflet][self._frame_index] /= 2 * (
-                1 + Zx**2 + Zy**2
-            ) ** (1.5)
 
         self.results.thickness[self._frame_index] = (
             self.results.z_surface["upper"][self._frame_index]
