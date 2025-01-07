@@ -19,13 +19,8 @@ License
 
 Source code included in this project is available in the GitHub repository
 https://github.com/ctlee/membrane-spectral-analysis under the GNU Public License
-v3 , version 3 (see [LICENSE]).
+v3, version 3 (see [LICENSE]).
 
-MembraneCurvature was developed as a [Google Summer of Code 2021][GSoC] 
-project with [MDAnalysis] Copyright (c) 2021, Estefania Barreto-Ojeda
-
-
-[GSoC]: https://summerofcode.withgoogle.com/
 [MDAnalysis]: https://www.mdanalysis.org
 [MembraneCurvature]: https://github.com/MDAnalysis/membrane-curvature
 [calculate-bilayer-power-spectrum]: https://github.com/philipwfowler/calculate-bilayer-power-spectrum
